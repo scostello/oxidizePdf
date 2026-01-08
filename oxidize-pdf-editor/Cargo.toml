@@ -1,0 +1,32 @@
+[package]
+name = "oxidize-pdf-editor"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.77"
+authors = ["Santiago Fernández Muñoz"]
+license = "AGPL-3.0"
+description = "A PDF editor built with iced and oxidize-pdf"
+
+[dependencies]
+# PDF library
+oxidize-pdf = { path = "../oxidize-pdf-core", features = ["compression"] }
+
+# UI framework
+iced = { version = "0.13", features = ["image", "canvas", "advanced", "tokio"] }
+
+# PDF rendering
+pdfium-render = "0.8"
+
+# Image handling
+image = "0.25"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "2.0"
+
+# Utilities
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+tempfile = "3.0"
