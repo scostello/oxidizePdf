@@ -35,10 +35,10 @@ test-output/
 PDF_Samples/
 
 # Claude AI files - only ignore local/private files
-.claude/
 CLAUDE.local.md
 CLAUDE.private.md
 *.local.md
+.claude/settings.local.json
 
 # Internal project documentation
 IMPLEMENTATION_*.md

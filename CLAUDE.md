@@ -173,6 +173,42 @@ git push origin v1.2.3
 # GitHub Actions handles everything else
 ```
 
+## Claude Code Skills
+
+This project uses specialized Claude Code skills. All skills are located in `.claude/skills/`.
+
+### PDF Skills (Three-Tier Architecture)
+
+See `ai_docs/pdf_skills_readme.md` for complete architecture.
+
+| Skill | Use When |
+|-------|----------|
+| `/pdf-spec` | Need ISO 32000-1:2008 specification requirements |
+| `/pdf-debugging` | Diagnosing malformed PDF parsing failures |
+| `/pdf-tools` | Using external tools (pypdf, qpdf, pdfplumber) |
+
+### Rust Development Skills
+
+| Skill | Use When |
+|-------|----------|
+| `/rust-engineer` | Writing Rust code, ownership/lifetime issues, async patterns, trait design |
+| `/rust-perf-expert` | Performance optimization, profiling, benchmarking, binary size reduction |
+
+### GUI Development Skills
+
+| Skill | Use When |
+|-------|----------|
+| `/iced-dev` | Building iced GUI applications (architecture, widgets, styling, async) |
+| `/iced-testing` | Testing iced apps (unit tests, headless UI tests, CI/CD setup) |
+
+### Graphics & Utility Skills
+
+| Skill | Use When |
+|-------|----------|
+| `/graphics-core` | Graphics math, coordinate transforms, color spaces, Bezier curves |
+| `/progressive-file-disclosure` | Handling large files that exceed context window capacity |
+| `/skill-creator` | Creating or updating Claude Code skills |
+
 ## Test Organization (STRICT)
 
 **ALL examples MUST be in `oxidize-pdf-core/examples/` ONLY.**
@@ -259,6 +295,7 @@ git push origin v1.2.3
 | Invoice Extraction | `docs/INVOICE_EXTRACTION_GUIDE.md` |
 | Lints | `docs/LINTS.md` |
 | Roadmap | `.private/ROADMAP_MASTER.md` |
+| PDF Skills Architecture | `ai_docs/pdf_skills_readme.md` |
 
 ## External Resources
 - GitHub: https://github.com/BelowZero/oxidize-pdf
