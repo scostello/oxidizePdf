@@ -20,7 +20,6 @@ pub fn new() -> (PdfEditor, Task<Message>) {
 }
 
 /// Get the window title
-#[allow(dead_code)]
 pub fn title(editor: &PdfEditor) -> String {
     if let Some(doc) = &editor.state.current_document {
         format!("oxidizePdf Editor - {}", doc.filename())

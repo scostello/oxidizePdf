@@ -14,13 +14,13 @@ publish = false  # Not ready for public release - still in development (Phase 1 
 oxidize-pdf = { path = "../oxidize-pdf-core" }
 
 # GUI framework
-iced = { version = "0.13.1", features = ["tokio", "image"] }
+iced = { version = "0.14.0", features = ["tokio", "image"] }
 
 # Async runtime
 tokio = { version = "1.49.0", features = ["full"] }
 
 # File dialogs
-rfd = "0.15.4"
+rfd = "0.17.2"
 
 # Error handling
 anyhow = "1.0.100"
