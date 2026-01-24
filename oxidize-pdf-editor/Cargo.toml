@@ -7,6 +7,7 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
+publish = false  # Not ready for public release - still in development (Phase 1 of 8)
 
 [dependencies]
 # PDF processing
