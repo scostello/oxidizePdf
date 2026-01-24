@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "oxidize-pdf-core",
+    "oxidize-pdf-editor",
 ]
 exclude = [
     "lints",  # Dylint lints workspace (requires nightly)
