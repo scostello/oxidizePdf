@@ -111,6 +111,9 @@ tarpaulin-report.html
 .DS_Store
 Thumbs.db
 
+# IDE files
+.idea/
+
 # Backup files
 *.bak
 *~
