@@ -34,10 +34,11 @@ test-output/
 # PDF samples for testing
 PDF_Samples/
 
-# Claude AI files
+# Claude AI files - only ignore local/private files
 .claude/
-CLAUDE.md
 CLAUDE.local.md
+CLAUDE.private.md
+*.local.md
 
 # Internal project documentation
 IMPLEMENTATION_*.md
@@ -110,6 +111,9 @@ tarpaulin-report.html
 # System files
 .DS_Store
 Thumbs.db
+
+# IDE files
+.idea/
 
 # Backup files
 *.bak
