@@ -20,6 +20,7 @@ pub fn new() -> (PdfEditor, Task<Message>) {
 }
 
 /// Get the window title
+#[allow(dead_code)]
 pub fn title(editor: &PdfEditor) -> String {
     if let Some(doc) = &editor.state.current_document {
         format!("oxidizePdf Editor - {}", doc.filename())
@@ -30,7 +31,7 @@ pub fn title(editor: &PdfEditor) -> String {
 
 /// Update the application state based on messages
 pub fn update(editor: &mut PdfEditor, message: Message) -> Task<Message> {
-        match message {
+    match message {
         Message::OpenFile => {
             // Open file dialog asynchronously
             Task::perform(
@@ -56,10 +57,7 @@ pub fn update(editor: &mut PdfEditor, message: Message) -> Task<Message> {
             editor.state.is_loading = true;
             editor.state.error_message = None;
 
-            Task::perform(
-                load_document_async(path),
-                Message::DocumentLoaded,
-            )
+            Task::perform(load_document_async(path), Message::DocumentLoaded)
         }
 
         Message::FileOpened(Err(error)) => {
@@ -108,7 +106,7 @@ pub fn update(editor: &mut PdfEditor, message: Message) -> Task<Message> {
 }
 
 /// Render the view
-pub fn view(editor: &PdfEditor) -> Element<Message> {
+pub fn view(editor: &PdfEditor) -> Element<'_, Message> {
     ui::view(&editor.state)
 }
 
@@ -119,16 +117,17 @@ pub fn theme(_editor: &PdfEditor) -> Theme {
 
 /// Load a document asynchronously (runs in tokio runtime)
 async fn load_document_async(path: PathBuf) -> Result<DocumentMetadata, String> {
-    tokio::task::spawn_blocking(move || {
-        match DocumentHandle::open(path) {
-            Ok(doc) => {
-                let metadata = doc.extract_metadata();
-                tracing::info!("Successfully loaded PDF: {} ({} pages)",
-                    metadata.filename(), metadata.page_count);
-                Ok(metadata)
-            }
-            Err(e) => Err(format!("Failed to load PDF: {}", e)),
+    tokio::task::spawn_blocking(move || match DocumentHandle::open(path) {
+        Ok(doc) => {
+            let metadata = doc.extract_metadata();
+            tracing::info!(
+                "Successfully loaded PDF: {} ({} pages)",
+                metadata.filename(),
+                metadata.page_count
+            );
+            Ok(metadata)
         }
+        Err(e) => Err(format!("Failed to load PDF: {}", e)),
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?

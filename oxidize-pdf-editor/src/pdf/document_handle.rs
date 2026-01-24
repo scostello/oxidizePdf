@@ -1,8 +1,8 @@
 use super::DocumentMetadata;
-use oxidize_pdf::parser::{PdfReader, PdfDocument};
+use anyhow::{Context, Result};
+use oxidize_pdf::parser::{PdfDocument, PdfReader};
 use std::fs::File;
 use std::path::PathBuf;
-use anyhow::{Context, Result};
 
 /// Wrapper around oxidizePdf's PdfDocument with additional metadata
 pub struct DocumentHandle {
@@ -31,7 +31,8 @@ impl DocumentHandle {
         let document = PdfDocument::new(reader);
 
         // Get page count
-        let page_count = document.page_count()
+        let page_count = document
+            .page_count()
             .with_context(|| "Failed to get page count")? as usize;
 
         Ok(Self {
@@ -42,11 +43,13 @@ impl DocumentHandle {
     }
 
     /// Get the number of pages
+    #[allow(dead_code)]
     pub fn page_count(&self) -> usize {
         self.page_count
     }
 
     /// Get the filename
+    #[allow(dead_code)]
     pub fn filename(&self) -> String {
         self.path
             .file_name()
@@ -57,21 +60,18 @@ impl DocumentHandle {
 
     /// Get metadata title
     pub fn title(&self) -> Option<String> {
-        self.document.metadata()
-            .ok()
-            .and_then(|m| m.title)
+        self.document.metadata().ok().and_then(|m| m.title)
     }
 
     /// Get metadata author
     pub fn author(&self) -> Option<String> {
-        self.document.metadata()
-            .ok()
-            .and_then(|m| m.author)
+        self.document.metadata().ok().and_then(|m| m.author)
     }
 
     /// Get PDF version
     pub fn version(&self) -> String {
-        self.document.metadata()
+        self.document
+            .metadata()
             .ok()
             .map(|m| m.version)
             .unwrap_or_else(|| "Unknown".to_string())

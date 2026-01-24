@@ -11,11 +11,7 @@ fn main() -> iced::Result {
     tracing::info!("Starting oxidizePdf Editor - Phase 1: Basic Viewer");
 
     // Run the application using the builder pattern
-    iced::application(
-        "oxidizePdf Editor",
-        app::update,
-        app::view
-    )
-    .theme(app::theme)
-    .run_with(app::new)
+    iced::application("oxidizePdf Editor", app::update, app::view)
+        .theme(app::theme)
+        .run_with(app::new)
 }

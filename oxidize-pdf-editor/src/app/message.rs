@@ -19,5 +19,6 @@ pub enum Message {
     PreviousPage,
 
     /// Go to specific page (0-based index)
+    #[allow(dead_code)]
     GoToPage(usize),
 }

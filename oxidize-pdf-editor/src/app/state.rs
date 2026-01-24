@@ -20,6 +20,7 @@ pub struct EditorState {
 }
 
 impl EditorState {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self::default()
     }

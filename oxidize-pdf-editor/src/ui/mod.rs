@@ -3,7 +3,7 @@ use iced::widget::{button, column, container, row, text, Column};
 use iced::{Element, Length};
 
 /// Create the main view for the application
-pub fn view(state: &EditorState) -> Element<Message> {
+pub fn view(state: &EditorState) -> Element<'_, Message> {
     if state.is_loading {
         loading_view()
     } else if let Some(error) = &state.error_message {
@@ -35,18 +35,16 @@ fn welcome_view() -> Element<'static, Message> {
 
 /// Loading screen
 fn loading_view() -> Element<'static, Message> {
-    container(
-        text("Loading PDF...").size(24)
-    )
-    .width(Length::Fill)
-    .height(Length::Fill)
-    .center_x(Length::Fill)
-    .center_y(Length::Fill)
-    .into()
+    container(text("Loading PDF...").size(24))
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .center_x(Length::Fill)
+        .center_y(Length::Fill)
+        .into()
 }
 
 /// Error view
-fn error_view(error: &str) -> Element<Message> {
+fn error_view(error: &str) -> Element<'_, Message> {
     container(
         column![
             text("Error").size(24),
@@ -64,13 +62,11 @@ fn error_view(error: &str) -> Element<Message> {
 }
 
 /// Document view with metadata and navigation
-fn document_view(state: &EditorState) -> Element<Message> {
+fn document_view(state: &EditorState) -> Element<'_, Message> {
     let doc = state.current_document.as_ref().unwrap();
 
     // Create metadata section
-    let mut metadata_column = Column::new()
-        .spacing(10)
-        .padding(20);
+    let mut metadata_column = Column::new().spacing(10).padding(20);
 
     metadata_column = metadata_column.push(text(format!("File: {}", doc.filename())).size(18));
 
@@ -86,19 +82,17 @@ fn document_view(state: &EditorState) -> Element<Message> {
     metadata_column = metadata_column.push(text(format!("Version: {}", doc.version)));
 
     // Create navigation controls
-    let prev_button = button("◀ Previous")
-        .on_press_maybe(if state.can_go_previous() {
-            Some(Message::PreviousPage)
-        } else {
-            None
-        });
+    let prev_button = button("◀ Previous").on_press_maybe(if state.can_go_previous() {
+        Some(Message::PreviousPage)
+    } else {
+        None
+    });
 
-    let next_button = button("Next ▶")
-        .on_press_maybe(if state.can_go_next() {
-            Some(Message::NextPage)
-        } else {
-            None
-        });
+    let next_button = button("Next ▶").on_press_maybe(if state.can_go_next() {
+        Some(Message::NextPage)
+    } else {
+        None
+    });
 
     let page_info = text(format!(
         "Page {} of {}",
@@ -128,24 +122,24 @@ fn document_view(state: &EditorState) -> Element<Message> {
             ]
             .padding(10)
             .spacing(10),
-
             // Metadata section
             metadata_column,
-
             // Page content placeholder
             container(
-                text(format!("Page {} content would be displayed here", state.current_page_display()))
-                    .size(14)
+                text(format!(
+                    "Page {} content would be displayed here",
+                    state.current_page_display()
+                ))
+                .size(14)
             )
             .width(Length::Fill)
             .height(Length::Fill)
             .center_x(Length::Fill)
             .center_y(Length::Fill),
-
             // Navigation controls
             navigation
         ]
-        .spacing(10)
+        .spacing(10),
     )
     .width(Length::Fill)
     .height(Length::Fill)
