@@ -4,14 +4,45 @@
 
 | Field | Value |
 |-------|-------|
-| **Last Session** | 2026-01-17 - Fix Issue #115 Font Subsetting |
+| **Last Session** | 2026-01-29 - Issue #116 Follow-up: space_threshold tuning |
 | **Branch** | develop_santi |
-| **Version** | v1.6.8 (released to crates.io) |
-| **Tests** | 5005 unit + 185 doc tests passing |
+| **Version** | v1.6.10 |
+| **Tests** | 5008 unit + 186 doc tests passing |
 | **Coverage** | 70.00% |
 | **Quality Grade** | A (95/100) |
 | **PDF Success Rate** | 99.3% (275/277 failure corpus) |
 | **ISO Requirements** | 310 curated, 100% linked to code (66.8% high verification) |
+
+### Session Summary (2026-01-29) - Issue #116 Follow-up: space_threshold Tuning
+- **Issue #116 Follow-up**: User reported unexpected spaces in extracted text ("tw o" instead of "two")
+  - **Analysis**: Problem was pre-existing, not caused by sanitization fix
+  - **Root Cause**: `space_threshold` default (0.2) too aggressive for PDFs with micro-adjustments
+  - **Fix**: Increased `space_threshold` default from 0.2 to 0.3
+  - **Validation**: Analyzed 709 PDFs from test corpus
+    - 4.8% reduction in total spaces
+    - 16.2% reduction in fragmented word patterns
+  - **Files Modified**:
+    - `text/extraction.rs` - default + tests
+    - `text/plaintext/types.rs` - default + docs + tests
+    - `text/plaintext/extractor.rs` - test
+    - `operations/page_analysis.rs` - hardcoded value
+- **GitHub Issue #116**: Updated with analysis and workaround documentation
+- **Commit**: `30a6266` - feat(text): increase space_threshold default from 0.2 to 0.3
+
+### Session Summary (2026-01-28) - Fix Issue #116 Text Sanitization
+- **Issue #116 Fixed**: Extracted text no longer contains NUL bytes and control characters
+  - **Bug**: Text extraction returned `\0\u{3}` (NUL+ETX) instead of spaces between words
+  - **Root Cause**: `encoding.rs` converted control bytes (0x00-0x1F) directly to chars without filtering
+  - **Fix**: Added `sanitize_extracted_text()` function in `extraction.rs`
+    - Replaces `\0\u{3}` sequences with space (common word separator pattern)
+    - Replaces standalone `\0` with space
+    - Removes other ASCII control chars (except `\t`, `\n`, `\r`)
+    - Collapses multiple consecutive spaces
+  - **Integration**: Applied to both CMap decode and fallback encoding paths
+  - **TDD Approach**: 14 new tests covering all edge cases
+- **Tests**: 5022 unit + 186 doc tests (14 new sanitization tests)
+- **Files Modified**: `oxidize-pdf-core/src/text/extraction.rs`, `oxidize-pdf-core/src/text/mod.rs`
+- **New Test File**: `oxidize-pdf-core/tests/text_sanitization_test.rs`
 
 ### Session Summary (2026-01-17) - Fix Issue #115 Font Subsetting
 - **Issue #115 Fixed**: Large fonts with few characters now properly subset
@@ -22,7 +53,7 @@
     - Large fonts always subset, regardless of char count
   - **New Constants**: `SUBSETTING_SIZE_THRESHOLD` (100KB), `SUBSETTING_CHAR_THRESHOLD` (10)
   - **TDD Approach**: 9 new tests covering all edge cases
-- **Tests**: 5005 unit + 185 doc tests (9 new subsetting tests)
+- **Tests**: 5008 unit + 185 doc tests (9 new subsetting tests, +3 from pre-commit)
 - **Files Modified**: `oxidize-pdf-core/src/text/fonts/truetype_subsetter.rs`
 
 ### Session Summary (2026-01-10) - Release v1.6.8

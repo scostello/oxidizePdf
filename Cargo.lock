@@ -3183,7 +3183,7 @@ dependencies = [
 
 [[package]]
 name = "oxidize-pdf"
-version = "1.6.9"
+version = "1.6.11"
 dependencies = [
  "aes",
  "bitflags 2.9.1",
