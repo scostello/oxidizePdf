@@ -5,8 +5,8 @@
 | Field | Value |
 |-------|-------|
 | **Last Session** | 2026-01-29 - Issue #116 Follow-up: space_threshold tuning |
-| **Branch** | develop_santi |
-| **Version** | v1.6.10 |
+| **Branch** | feat/pdf-editor |
+| **Version** | v1.6.10 (Edition 2024, MSRV 1.91) |
 | **Tests** | 5008 unit + 186 doc tests passing |
 | **Coverage** | 70.00% |
 | **Quality Grade** | A (95/100) |

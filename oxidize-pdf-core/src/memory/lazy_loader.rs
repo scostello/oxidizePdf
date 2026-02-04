@@ -143,8 +143,8 @@ impl<R: Read + Seek> LazyDocument<R> {
             // Preload fonts
             if let Some(fonts) = resources.get("Font").and_then(|f| f.as_dict()) {
                 for font_ref in fonts.0.values() {
-                    if let PdfObject::Reference(num, gen) = font_ref {
-                        let id = ObjectId::new(*num, *gen);
+                    if let PdfObject::Reference(num, generation) = font_ref {
+                        let id = ObjectId::new(*num, *generation);
                         let _ = self.get_object(&id);
                     }
                 }
@@ -153,8 +153,8 @@ impl<R: Read + Seek> LazyDocument<R> {
             // Preload XObjects (images)
             if let Some(xobjects) = resources.get("XObject").and_then(|x| x.as_dict()) {
                 for xobj_ref in xobjects.0.values() {
-                    if let PdfObject::Reference(num, gen) = xobj_ref {
-                        let id = ObjectId::new(*num, *gen);
+                    if let PdfObject::Reference(num, generation) = xobj_ref {
+                        let id = ObjectId::new(*num, *generation);
                         let _ = self.get_object(&id);
                     }
                 }
@@ -397,9 +397,9 @@ mod tests {
         assert!(result.is_err());
 
         match result {
-            Err(PdfError::InvalidObjectReference(num, gen)) => {
+            Err(PdfError::InvalidObjectReference(num, generation)) => {
                 assert_eq!(num, 999);
-                assert_eq!(gen, 0);
+                assert_eq!(generation, 0);
             }
             _ => panic!("Expected InvalidObjectReference error"),
         }

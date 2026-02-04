@@ -211,15 +211,15 @@ proptest! {
 
     fn test_object_reference_validity(
         num in 1u32..=999999u32,
-        gen in 0u16..=65535u16
+        generation in 0u16..=65535u16
     ) {
-        let ref_str = format!("{num} {gen} R");
+        let ref_str = format!("{num} {generation} R");
 
         // Reference string should parse back to same values
         let parts: Vec<&str> = ref_str.split_whitespace().collect();
         prop_assert_eq!(parts.len(), 3);
         prop_assert_eq!(parts[0].parse::<u32>().unwrap(), num);
-        prop_assert_eq!(parts[1].parse::<u16>().unwrap(), gen);
+        prop_assert_eq!(parts[1].parse::<u16>().unwrap(), generation);
         prop_assert_eq!(parts[2], "R");
     }
 

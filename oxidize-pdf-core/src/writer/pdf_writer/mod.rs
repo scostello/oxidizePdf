@@ -228,8 +228,8 @@ impl<W: Write> PdfWriter<W> {
         let (base_pages_id, base_pages_gen) = base_catalog
             .get("Pages")
             .and_then(|obj| {
-                if let crate::parser::objects::PdfObject::Reference(id, gen) = obj {
-                    Some((*id, *gen))
+                if let crate::parser::objects::PdfObject::Reference(id, generation) = obj {
+                    Some((*id, *generation))
                 } else {
                     None
                 }
@@ -254,11 +254,11 @@ impl<W: Write> PdfWriter<W> {
                             arr.0
                                 .iter()
                                 .filter_map(|item| {
-                                    if let crate::parser::objects::PdfObject::Reference(id, gen) =
+                                    if let crate::parser::objects::PdfObject::Reference(id, generation) =
                                         item
                                     {
                                         Some(crate::objects::Object::Reference(
-                                            crate::objects::ObjectId::new(*id, *gen),
+                                            crate::objects::ObjectId::new(*id, *generation),
                                         ))
                                     } else {
                                         None
@@ -467,8 +467,8 @@ impl<W: Write> PdfWriter<W> {
         let (base_pages_id, base_pages_gen) = base_catalog
             .get("Pages")
             .and_then(|obj| {
-                if let crate::parser::objects::PdfObject::Reference(id, gen) = obj {
-                    Some((*id, *gen))
+                if let crate::parser::objects::PdfObject::Reference(id, generation) = obj {
+                    Some((*id, *generation))
                 } else {
                     None
                 }
@@ -490,11 +490,11 @@ impl<W: Write> PdfWriter<W> {
                             arr.0
                                 .iter()
                                 .filter_map(|item| {
-                                    if let crate::parser::objects::PdfObject::Reference(id, gen) =
+                                    if let crate::parser::objects::PdfObject::Reference(id, generation) =
                                         item
                                     {
                                         Some(crate::objects::Object::Reference(
-                                            crate::objects::ObjectId::new(*id, *gen),
+                                            crate::objects::ObjectId::new(*id, *generation),
                                         ))
                                     } else {
                                         None
@@ -2365,7 +2365,7 @@ impl<W: Write> PdfWriter<W> {
             let mut new_annots = Vec::new();
 
             for annot in annots {
-                if let Object::Dictionary(ref annot_dict) = annot {
+                if let Object::Dictionary(annot_dict) = annot {
                     if let Some(Object::Name(subtype)) = annot_dict.get("Subtype") {
                         if subtype == "Widget" {
                             // Process widget annotation

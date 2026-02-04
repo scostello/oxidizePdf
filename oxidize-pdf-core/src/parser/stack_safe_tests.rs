@@ -206,8 +206,8 @@ mod tests {
         let refs = [(1, 0), (2, 0), (3, 0), (4, 0), (5, 0)];
 
         // Push all references to stack (simulating navigation chain)
-        for &(obj, gen) in &refs {
-            assert!(context.push_ref(obj, gen).is_ok());
+        for &(obj, generation) in &refs {
+            assert!(context.push_ref(obj, generation).is_ok());
         }
 
         // Attempt to revisit the first one (simulating a cycle)

@@ -362,8 +362,8 @@ impl<R: Read + Seek> PdfReader<R> {
                 if let Some(encrypt_dict) = encrypt_obj.as_dict() {
                     // Get file ID from trailer
                     let file_id = trailer.id().and_then(|id_obj| {
-                        if let PdfObject::Array(ref id_array) = id_obj {
-                            if let Some(PdfObject::String(ref id_bytes)) = id_array.get(0) {
+                        if let PdfObject::Array(id_array) = id_obj {
+                            if let Some(PdfObject::String(id_bytes)) = id_array.get(0) {
                                 Some(id_bytes.as_bytes().to_vec())
                             } else {
                                 None
@@ -520,7 +520,7 @@ impl<R: Read + Seek> PdfReader<R> {
                 self.xref.add_entry(obj_num, xref_entry);
 
                 // Return reference to cached dictionary
-                if let Some(PdfObject::Dictionary(ref dict)) = self.object_cache.get(&key) {
+                if let Some(PdfObject::Dictionary(dict)) = self.object_cache.get(&key) {
                     return Ok(dict);
                 }
             }
@@ -1771,13 +1771,13 @@ impl<R: Read + Seek> PdfReader<R> {
                                 // parts[0] should be the object number
                                 // parts[1] should be the generation
                                 // parts[2] should be "R" or "R/..." (compact format)
-                                if let (Ok(obj), Ok(gen)) =
+                                if let (Ok(obj), Ok(generation)) =
                                     (parts[0].parse::<u32>(), parts[1].parse::<u16>())
                                 {
                                     if parts[2] == "R" || parts[2].starts_with('R') {
                                         result_dict.insert(
                                             PdfName("Pages".to_string()),
-                                            PdfObject::Reference(obj, gen),
+                                            PdfObject::Reference(obj, generation),
                                         );
                                     }
                                 }
@@ -1804,13 +1804,13 @@ impl<R: Read + Seek> PdfReader<R> {
                             let after_meta = &dict_content[meta_start + 9..];
                             let parts: Vec<&str> = after_meta.split_whitespace().collect();
                             if parts.len() >= 3 {
-                                if let (Ok(obj), Ok(gen)) =
+                                if let (Ok(obj), Ok(generation)) =
                                     (parts[0].parse::<u32>(), parts[1].parse::<u16>())
                                 {
                                     if parts[2] == "R" {
                                         result_dict.insert(
                                             PdfName("Metadata".to_string()),
-                                            PdfObject::Reference(obj, gen),
+                                            PdfObject::Reference(obj, generation),
                                         );
                                     }
                                 }
@@ -1826,13 +1826,13 @@ impl<R: Read + Seek> PdfReader<R> {
                             } else {
                                 let parts: Vec<&str> = after_acro.split_whitespace().collect();
                                 if parts.len() >= 3 {
-                                    if let (Ok(obj), Ok(gen)) =
+                                    if let (Ok(obj), Ok(generation)) =
                                         (parts[0].parse::<u32>(), parts[1].parse::<u16>())
                                     {
                                         if parts[2] == "R" {
                                             result_dict.insert(
                                                 PdfName("AcroForm".to_string()),
-                                                PdfObject::Reference(obj, gen),
+                                                PdfObject::Reference(obj, generation),
                                             );
                                         }
                                     }
@@ -2361,7 +2361,7 @@ impl<R: Read + Seek> PdfReader<R> {
                             self.object_cache.insert(key, PdfObject::Dictionary(dict));
 
                             // Return reference to cached object
-                            if let Some(PdfObject::Dictionary(ref dict)) =
+                            if let Some(PdfObject::Dictionary(dict)) =
                                 self.object_cache.get(&key)
                             {
                                 return Ok(dict);

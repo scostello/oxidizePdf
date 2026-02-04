@@ -1308,17 +1308,17 @@ impl XRefTable {
                     // Just the flag, no generation number
                     (0, Some(flag_char))
                 } else {
-                    let gen = gen_str
+                    let generation = gen_str
                         .parse::<u16>()
                         .map_err(|_| ParseError::InvalidXRef)?;
-                    (gen, Some(flag_char))
+                    (generation, Some(flag_char))
                 }
             } else {
                 // Try to parse as generation number
-                let gen = gen_part
+                let generation = gen_part
                     .parse::<u16>()
                     .map_err(|_| ParseError::InvalidXRef)?;
-                (gen, None)
+                (generation, None)
             }
         } else {
             (0, None)

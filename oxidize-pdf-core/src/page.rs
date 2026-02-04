@@ -463,7 +463,7 @@ impl Page {
                 let data = stream.data.clone();
                 Object::Stream(Stream::new(dict, data))
             }
-            PdfObject::Reference(num, gen) => Object::Reference(ObjectId::new(*num, *gen)),
+            PdfObject::Reference(num, generation) => Object::Reference(ObjectId::new(*num, *generation)),
         }
     }
 
@@ -853,7 +853,7 @@ impl Page {
         let content_to_add = if let Some(ref preserved_res) = self.preserved_resources {
             // Check if we have preserved fonts that need renaming
             if let Some(fonts_dict) = preserved_res.get("Font") {
-                if let crate::pdf_objects::Object::Dictionary(ref fonts) = fonts_dict {
+                if let crate::pdf_objects::Object::Dictionary(fonts) = fonts_dict {
                     // Build font mapping (F1 → OrigF1, Arial → OrigArial, etc.)
                     let mut font_mapping = std::collections::HashMap::new();
                     for (original_name, _) in fonts.iter() {

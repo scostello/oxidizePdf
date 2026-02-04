@@ -97,14 +97,14 @@ impl XRefRecovery {
 
                 // Extract object ID and generation
                 // parse_object_header expects buffer including " obj"
-                if let Some((id, gen, obj_start)) =
+                if let Some((id, generation, obj_start)) =
                     self.parse_object_header(&buffer[..absolute_pos])
                 {
                     let object_offset = base_offset + obj_start as u64;
 
                     // Verify object ends with "endobj"
                     if self.verify_object_end(&buffer[absolute_pos..]) {
-                        self.objects.insert((id, gen), object_offset);
+                        self.objects.insert((id, generation), object_offset);
                         self.stats.objects_found += 1;
                     }
                 }
@@ -148,12 +148,12 @@ impl XRefRecovery {
         }
 
         let id = id_str.parse::<u32>().ok()?;
-        let gen = gen_str.parse::<u16>().ok()?;
+        let generation = gen_str.parse::<u16>().ok()?;
 
         // Find start position of ID
         let id_pos = text.rfind(id_str)?;
 
-        Some((id, gen, id_pos))
+        Some((id, generation, id_pos))
     }
 
     /// Verify object ends properly
@@ -213,10 +213,10 @@ impl XRefRecovery {
         let mut xref_table = XRefTable::new();
 
         // Convert found objects to XRef entries
-        for ((id, gen), offset) in &self.objects {
+        for ((id, generation), offset) in &self.objects {
             let entry = XRefEntry {
                 offset: *offset,
-                generation: *gen,
+                generation: *generation,
                 in_use: true,
             };
 

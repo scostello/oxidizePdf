@@ -138,7 +138,7 @@ impl ObjectScanner {
                 let absolute_pos = pos + obj_start;
 
                 // Try to parse object header
-                if let Some((id, gen)) = parse_object_header(&buffer[pos..absolute_pos]) {
+                if let Some((id, generation)) = parse_object_header(&buffer[pos..absolute_pos]) {
                     let object_offset = base_offset + pos as u64;
 
                     // Scan object content
@@ -151,7 +151,7 @@ impl ObjectScanner {
 
                     let scanned_obj = ScannedObject {
                         id,
-                        generation: gen,
+                        generation,
                         offset: object_offset,
                         object_type,
                         is_valid,
@@ -200,8 +200,8 @@ fn parse_object_header(buffer: &[u8]) -> Option<(u32, u16)> {
 
     if parts.len() >= 2 {
         let id = parts[parts.len() - 2].parse().ok()?;
-        let gen = parts[parts.len() - 1].parse().ok()?;
-        Some((id, gen))
+        let generation = parts[parts.len() - 1].parse().ok()?;
+        Some((id, generation))
     } else {
         None
     }

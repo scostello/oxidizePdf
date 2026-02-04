@@ -91,6 +91,7 @@ oxidize-pdf-core/examples/*_private*.rs
 
 # Python scripts in root (should be in tools/)
 /*.py
+__pycache__/
 
 # Rust scripts in root (should be in dev-tools/)
 /*.rs

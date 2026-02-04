@@ -1096,7 +1096,7 @@ impl TrueTypeFont {
 
         // Process glyphs in new index order
         let mut sorted_entries: Vec<(&u16, &u16)> = glyph_map.iter().collect();
-        sorted_entries.sort_by_key(|(_, &new_idx)| new_idx);
+        sorted_entries.sort_by_key(|&(_, &new_idx)| new_idx);
 
         for &(old_index, _new_index) in &sorted_entries {
             // Get glyph data offset and length from loca table
@@ -1281,7 +1281,7 @@ impl TrueTypeFont {
 
         // Process glyphs in new index order
         let mut sorted_entries: Vec<(&u16, &u16)> = glyph_map.iter().collect();
-        sorted_entries.sort_by_key(|(_, &new_idx)| new_idx);
+        sorted_entries.sort_by_key(|&(_, &new_idx)| new_idx);
 
         for &(old_index, _new_index) in &sorted_entries {
             let (advance_width, lsb) = self.get_glyph_metrics(*old_index)?;

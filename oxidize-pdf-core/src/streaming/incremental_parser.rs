@@ -108,14 +108,14 @@ impl IncrementalParser {
                 if let Some(version_part) = line.strip_prefix("%PDF-") {
                     let version = version_part.trim().to_string();
                     self.events.push(ParseEvent::Header { version });
-                } else if let Some((id, gen)) = self.parse_object_header(line) {
+                } else if let Some((id, generation)) = self.parse_object_header(line) {
                     self.state = ParserState::InObject {
                         id,
-                        generation: gen,
+                        generation,
                     };
                     self.events.push(ParseEvent::ObjectStart {
                         id,
-                        generation: gen,
+                        generation,
                     });
                 }
             }
@@ -176,8 +176,8 @@ impl IncrementalParser {
         let parts: Vec<&str> = line.split_whitespace().collect();
         if parts.len() >= 3 && parts[2] == "obj" {
             let id = parts[0].parse().ok()?;
-            let gen = parts[1].parse().ok()?;
-            Some((id, gen))
+            let generation = parts[1].parse().ok()?;
+            Some((id, generation))
         } else {
             None
         }

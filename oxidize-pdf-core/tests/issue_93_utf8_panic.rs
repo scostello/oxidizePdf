@@ -131,7 +131,7 @@ fn test_utf8_multi_byte_boundary_safety() {
     let newline_positions: Vec<usize> = buffer
         .iter()
         .enumerate()
-        .filter(|(_, &b)| b == b'\n')
+        .filter(|&(_, &b)| b == b'\n')
         .map(|(i, _)| i)
         .collect();
 

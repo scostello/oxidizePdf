@@ -182,7 +182,7 @@ fn find_cell_for_fragment(
     let row_idx = row_positions
         .iter()
         .enumerate()
-        .min_by(|(_, &y1), (_, &y2)| {
+        .min_by(|&(_, &y1), &(_, &y2)| {
             let dist1 = (fragment.y - y1).abs();
             let dist2 = (fragment.y - y2).abs();
             // Use unwrap_or for f64 comparison (NaN sorts as Equal)

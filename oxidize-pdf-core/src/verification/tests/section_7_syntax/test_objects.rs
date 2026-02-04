@@ -527,7 +527,7 @@ mod integration_tests {
         assert!(min_obj_num >= 1, "Object numbers should start from 1");
 
         // Verify all generation numbers are 0 for new documents
-        let all_gen_zero = object_numbers.iter().all(|(_, gen)| *gen == 0);
+        let all_gen_zero = object_numbers.iter().all(|(_, generation)| *generation == 0);
         if all_gen_zero {
             println!("✓ All objects have generation 0 (new document)");
         } else {

@@ -2997,7 +2997,7 @@ dependencies = [
 
 [[package]]
 name = "oxidize-pdf-editor"
-version = "1.6.9"
+version = "1.6.11"
 dependencies = [
  "anyhow",
  "iced",

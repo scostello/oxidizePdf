@@ -273,14 +273,16 @@ fn test_environment_detection() {
     }
 
     // Test fixture disable
-    std::env::set_var("OXIDIZE_PDF_FIXTURES", "off");
+    // SAFETY: This test runs single-threaded and we restore the env var immediately after
+    unsafe { std::env::set_var("OXIDIZE_PDF_FIXTURES", "off") };
     assert!(
         !fixtures_available(),
         "Fixtures should be disabled when OXIDIZE_PDF_FIXTURES=off"
     );
 
     // Clean up
-    std::env::remove_var("OXIDIZE_PDF_FIXTURES");
+    // SAFETY: Restoring environment to original state
+    unsafe { std::env::remove_var("OXIDIZE_PDF_FIXTURES") };
 
     println!("✅ Environment detection working correctly");
 }

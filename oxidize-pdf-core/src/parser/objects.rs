@@ -384,16 +384,16 @@ impl PdfObject {
 
                 // Check if this is part of a reference (e.g., "1 0 R")
                 match lexer.next_token()? {
-                    Token::Integer(gen) if (0..=65535).contains(&gen) => {
+                    Token::Integer(generation) if (0..=65535).contains(&generation) => {
                         // Might be a reference, check for 'R'
                         match lexer.next_token()? {
                             Token::Name(s) if s == "R" => {
-                                Ok(PdfObject::Reference(i as u32, gen as u16))
+                                Ok(PdfObject::Reference(i as u32, generation as u16))
                             }
                             token => {
                                 // Not a reference, push back the tokens
                                 lexer.push_token(token);
-                                lexer.push_token(Token::Integer(gen));
+                                lexer.push_token(Token::Integer(generation));
                                 Ok(PdfObject::Integer(i))
                             }
                         }
@@ -978,7 +978,7 @@ impl PdfObject {
     /// ```
     pub fn as_reference(&self) -> Option<(u32, u16)> {
         match self {
-            PdfObject::Reference(obj, gen) => Some((*obj, *gen)),
+            PdfObject::Reference(obj, generation) => Some((*obj, *generation)),
             _ => None,
         }
     }

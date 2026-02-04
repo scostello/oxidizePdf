@@ -633,8 +633,8 @@ impl ParsedPage {
                                 .0
                                 .iter()
                                 .filter_map(|obj| {
-                                    if let PdfObject::Reference(num, gen) = obj {
-                                        Some((*num, *gen))
+                                    if let PdfObject::Reference(num, generation) = obj {
+                                        Some((*num, *generation))
                                     } else {
                                         None
                                     }
