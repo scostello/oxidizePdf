@@ -55,3 +55,7 @@ path = "src/lib.rs"
 [[bin]]
 name = "oxidize-pdf-editor"
 path = "src/main.rs"
+
+[[example]]
+name = "native_render_visual"
+required-features = ["native-render"]
