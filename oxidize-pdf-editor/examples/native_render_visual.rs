@@ -5,16 +5,30 @@
 //!
 //! Run with: cargo run --example native_render_visual --features native-render -p oxidize-pdf-editor
 
-use oxidize_pdf::{Color, Document, Page};
+use oxidize_pdf::{Color, Document, Font, Page};
 use oxidize_pdf_editor::render::{NativeBackend, PageRenderer};
 use std::path::Path;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Create a simple PDF with vector graphics
+    // Create a simple PDF with vector graphics and text
     let mut doc = Document::new();
     doc.set_title("Native Render Test");
 
     let mut page = Page::a4();
+
+    // Add title text
+    page.text()
+        .set_font(Font::Helvetica, 24.0)
+        .set_fill_color(Color::gray(0.0))
+        .at(150.0, 780.0)
+        .write("Native Renderer Test")?;
+
+    // Add description text
+    page.text()
+        .set_font(Font::Helvetica, 12.0)
+        .set_fill_color(Color::gray(0.4))
+        .at(100.0, 750.0)
+        .write("This PDF tests vector graphics and text rendering.")?;
 
     // Draw some shapes
     let graphics = page.graphics();
@@ -54,6 +68,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .move_to(50.0, 200.0)
         .line_to(550.0, 300.0)
         .stroke();
+
+    // Add labels for the shapes
+    page.text()
+        .set_font(Font::Helvetica, 10.0)
+        .set_fill_color(Color::gray(0.0))
+        .at(150.0, 585.0)
+        .write("Red Rectangle")?;
+
+    page.text()
+        .set_font(Font::Helvetica, 10.0)
+        .set_fill_color(Color::gray(0.0))
+        .at(400.0, 585.0)
+        .write("Blue Stroke")?;
+
+    page.text()
+        .set_font(Font::Helvetica, 10.0)
+        .set_fill_color(Color::gray(0.0))
+        .at(165.0, 335.0)
+        .write("Green Circle")?;
+
+    page.text()
+        .set_font(Font::Helvetica, 10.0)
+        .set_fill_color(Color::gray(0.0))
+        .at(415.0, 335.0)
+        .write("Yellow Triangle")?;
 
     doc.add_page(page);
 

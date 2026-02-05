@@ -5,6 +5,7 @@
 
 use super::graphics_state::GraphicsStateStack;
 use super::path_builder::PdfPathBuilder;
+use super::text_renderer::TextRenderer;
 use super::{PageRenderer, RenderError};
 
 use oxidize_pdf::parser::content::{ContentOperation, ContentParser};
@@ -17,18 +18,19 @@ use tiny_skia::{FillRule, Paint, Pixmap, Stroke, Transform};
 /// Native Rust PDF renderer using tiny-skia
 ///
 /// This renderer processes PDF content streams and rasterizes them
-/// using the tiny-skia 2D graphics library.
+/// using the tiny-skia 2D graphics library and skrifa for text.
 ///
 /// # Current Limitations
 ///
-/// - Text rendering not yet implemented (requires skrifa integration)
 /// - Only basic color spaces (DeviceRGB, DeviceGray, DeviceCMYK)
 /// - No transparency group support
 /// - No pattern/shading support
-/// - Content stream rendering is WIP
+/// - Text uses fallback system fonts (embedded font extraction WIP)
 pub struct NativeBackend {
     /// Background color for rendered pages
     background: tiny_skia::Color,
+    /// Text renderer with font management
+    text_renderer: TextRenderer,
 }
 
 impl NativeBackend {
@@ -36,6 +38,7 @@ impl NativeBackend {
     pub fn new() -> Self {
         Self {
             background: tiny_skia::Color::WHITE,
+            text_renderer: TextRenderer::new(),
         }
     }
 
@@ -43,6 +46,7 @@ impl NativeBackend {
     pub fn with_background(r: u8, g: u8, b: u8) -> Self {
         Self {
             background: tiny_skia::Color::from_rgba8(r, g, b, 255),
+            text_renderer: TextRenderer::new(),
         }
     }
 
@@ -176,7 +180,7 @@ impl NativeBackend {
                 path_builder.clear();
             }
 
-            // Text operators - TODO: implement with skrifa
+            // Text operators
             ContentOperation::BeginText => {
                 state_stack.current_mut().text.text_matrix = Transform::identity();
                 state_stack.current_mut().text.text_line_matrix = Transform::identity();
@@ -186,8 +190,104 @@ impl NativeBackend {
                 state_stack.current_mut().text.font_name = Some(name.clone());
                 state_stack.current_mut().text.font_size = *size;
             }
-            ContentOperation::ShowText(_) | ContentOperation::ShowTextArray(_) => {
-                // TODO: Implement text rendering with skrifa
+            ContentOperation::MoveText(tx, ty) => {
+                // Td operator: move to start of next line
+                let text = &mut state_stack.current_mut().text;
+                let new_matrix = Transform::from_translate(*tx, *ty)
+                    .post_concat(text.text_line_matrix);
+                text.text_matrix = new_matrix;
+                text.text_line_matrix = new_matrix;
+            }
+            ContentOperation::MoveTextSetLeading(tx, ty) => {
+                // TD operator: move and set leading
+                state_stack.current_mut().text.leading = -*ty;
+                let text = &mut state_stack.current_mut().text;
+                let new_matrix = Transform::from_translate(*tx, *ty)
+                    .post_concat(text.text_line_matrix);
+                text.text_matrix = new_matrix;
+                text.text_line_matrix = new_matrix;
+            }
+            ContentOperation::SetTextMatrix(a, b, c, d, e, f) => {
+                // Tm operator: set text matrix directly
+                let matrix = Transform::from_row(*a, *b, *c, *d, *e, *f);
+                state_stack.current_mut().text.text_matrix = matrix;
+                state_stack.current_mut().text.text_line_matrix = matrix;
+            }
+            ContentOperation::NextLine => {
+                // T* operator: move to start of next line
+                let leading = state_stack.current().text.leading;
+                let text = &mut state_stack.current_mut().text;
+                let new_matrix = Transform::from_translate(0.0, -leading)
+                    .post_concat(text.text_line_matrix);
+                text.text_matrix = new_matrix;
+                text.text_line_matrix = new_matrix;
+            }
+            ContentOperation::SetLeading(leading) => {
+                state_stack.current_mut().text.leading = *leading;
+            }
+            ContentOperation::SetCharSpacing(spacing) => {
+                state_stack.current_mut().text.char_spacing = *spacing;
+            }
+            ContentOperation::SetWordSpacing(spacing) => {
+                state_stack.current_mut().text.word_spacing = *spacing;
+            }
+            ContentOperation::SetHorizontalScaling(scale) => {
+                state_stack.current_mut().text.horizontal_scaling = *scale;
+            }
+            ContentOperation::SetTextRise(rise) => {
+                state_stack.current_mut().text.rise = *rise;
+            }
+            ContentOperation::SetTextRenderMode(mode) => {
+                state_stack.current_mut().text.render_mode = *mode;
+            }
+            ContentOperation::ShowText(text_bytes) => {
+                self.render_text(text_bytes, state_stack.current(), pixmap);
+            }
+            ContentOperation::ShowTextArray(elements) => {
+                // TJ operator: show text with positioning adjustments
+                use oxidize_pdf::parser::content::TextElement;
+                for element in elements {
+                    match element {
+                        TextElement::Text(text_bytes) => {
+                            self.render_text(text_bytes, state_stack.current(), pixmap);
+                        }
+                        TextElement::Spacing(offset) => {
+                            // Negative offset moves right (PDF convention)
+                            // Offset is in thousandths of a unit of text space
+                            let font_size = state_stack.current().text.font_size;
+                            let adjustment = -(*offset) * font_size / 1000.0;
+                            let text = &mut state_stack.current_mut().text;
+                            text.text_matrix = Transform::from_translate(adjustment, 0.0)
+                                .post_concat(text.text_matrix);
+                        }
+                    }
+                }
+            }
+            ContentOperation::NextLineShowText(text_bytes) => {
+                // ' operator: T* then Tj
+                let leading = state_stack.current().text.leading;
+                {
+                    let text = &mut state_stack.current_mut().text;
+                    let new_matrix = Transform::from_translate(0.0, -leading)
+                        .post_concat(text.text_line_matrix);
+                    text.text_matrix = new_matrix;
+                    text.text_line_matrix = new_matrix;
+                }
+                self.render_text(text_bytes, state_stack.current(), pixmap);
+            }
+            ContentOperation::SetSpacingNextLineShowText(aw, ac, text_bytes) => {
+                // " operator: set word/char spacing, T*, then Tj
+                state_stack.current_mut().text.word_spacing = *aw;
+                state_stack.current_mut().text.char_spacing = *ac;
+                let leading = state_stack.current().text.leading;
+                {
+                    let text = &mut state_stack.current_mut().text;
+                    let new_matrix = Transform::from_translate(0.0, -leading)
+                        .post_concat(text.text_line_matrix);
+                    text.text_matrix = new_matrix;
+                    text.text_line_matrix = new_matrix;
+                }
+                self.render_text(text_bytes, state_stack.current(), pixmap);
             }
 
             _ => {}
@@ -232,6 +332,57 @@ impl NativeBackend {
             pixmap.stroke_path(&path, &paint, &stroke, Transform::identity(), None);
         }
         path_builder.clear();
+    }
+
+    /// Render text using the text renderer
+    fn render_text(
+        &self,
+        text_bytes: &[u8],
+        state: &super::graphics_state::GraphicsState,
+        pixmap: &mut Pixmap,
+    ) {
+        // Get font info from state
+        let font_name = state
+            .text
+            .font_name
+            .as_deref()
+            .unwrap_or("Helvetica");
+        let font_size = state.text.font_size;
+
+        // Calculate text position from text matrix and CTM
+        // Text matrix gives position in user space, CTM transforms to device space
+        let text_matrix = state.text.text_matrix;
+        let ctm = state.ctm;
+
+        // Combine text matrix with CTM to get device position
+        // The text position is (0, 0) in text space, transformed by text matrix
+        let tx = text_matrix.tx;
+        let ty = text_matrix.ty;
+
+        // Apply CTM to get device coordinates
+        let (x, y) = (
+            ctm.sx * tx + ctm.kx * ty + ctm.tx,
+            ctm.ky * tx + ctm.sy * ty + ctm.ty,
+        );
+
+        // Create paint with fill color
+        let mut paint = Paint::default();
+        paint.set_color(state.fill_color);
+        paint.anti_alias = true;
+
+        // Render the text
+        // Note: CTM is already applied in the transform calculation above,
+        // so we pass identity transform to the text renderer
+        self.text_renderer.render_text_with_advances(
+            text_bytes,
+            font_name,
+            font_size,
+            x,
+            y,
+            Transform::identity(),
+            &paint,
+            pixmap,
+        );
     }
 }
 

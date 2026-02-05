@@ -10,11 +10,13 @@
 //! 1. Parsing operators via oxidize-pdf's ContentParser
 //! 2. Maintaining graphics state (CTM, colors, line properties)
 //! 3. Converting PDF paths to tiny-skia paths
-//! 4. Rasterizing to an RGBA bitmap
+//! 4. Rendering text using skrifa for glyph outlines
+//! 5. Rasterizing to an RGBA bitmap
 
 mod graphics_state;
 mod path_builder;
 mod renderer;
+mod text_renderer;
 
 pub use renderer::NativeBackend;
 
