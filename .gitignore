@@ -28,6 +28,10 @@ examples/results/*private*
 
 # Temporary output directories (should not exist)
 output/
+
+# BMAD workflow outputs
+_bmad/
+_bmad-output/
 **/output/
 test-output/
 
