@@ -1,5 +1,5 @@
 use crate::app::{message::Message, state::EditorState};
-use iced::widget::{button, column, container, image, row, scrollable, text, Column};
+use iced::widget::{button, column, container, image, row, scrollable, text};
 use iced::{Element, Length};
 
 /// Create the main view for the application

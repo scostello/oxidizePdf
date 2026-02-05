@@ -13,6 +13,7 @@
 //! 4. Rendering text using skrifa for glyph outlines
 //! 5. Rasterizing to an RGBA bitmap
 
+mod font_extractor;
 mod graphics_state;
 mod path_builder;
 mod renderer;

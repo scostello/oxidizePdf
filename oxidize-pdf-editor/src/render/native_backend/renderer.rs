@@ -3,6 +3,7 @@
 //! Implements the PageRenderer trait using tiny-skia for rasterization.
 //! This is the main entry point for the native rendering backend.
 
+use super::font_extractor::{extract_page_fonts, FontFileType};
 use super::graphics_state::GraphicsStateStack;
 use super::path_builder::PdfPathBuilder;
 use super::text_renderer::TextRenderer;
@@ -10,6 +11,7 @@ use super::{PageRenderer, RenderError};
 
 use oxidize_pdf::parser::content::{ContentOperation, ContentParser};
 use oxidize_pdf::parser::{PdfDocument, PdfReader};
+use std::cell::RefCell;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
@@ -20,17 +22,22 @@ use tiny_skia::{FillRule, Paint, Pixmap, Stroke, Transform};
 /// This renderer processes PDF content streams and rasterizes them
 /// using the tiny-skia 2D graphics library and skrifa for text.
 ///
+/// # Features
+///
+/// - Vector graphics rendering (paths, fills, strokes)
+/// - Text rendering with embedded font extraction
+/// - Basic color spaces (DeviceRGB, DeviceGray, DeviceCMYK)
+///
 /// # Current Limitations
 ///
-/// - Only basic color spaces (DeviceRGB, DeviceGray, DeviceCMYK)
 /// - No transparency group support
 /// - No pattern/shading support
-/// - Text uses fallback system fonts (embedded font extraction WIP)
+/// - Type1 fonts not yet supported (only TrueType/CFF)
 pub struct NativeBackend {
     /// Background color for rendered pages
     background: tiny_skia::Color,
-    /// Text renderer with font management
-    text_renderer: TextRenderer,
+    /// Text renderer with font management (RefCell for interior mutability)
+    text_renderer: RefCell<TextRenderer>,
 }
 
 impl NativeBackend {
@@ -38,7 +45,7 @@ impl NativeBackend {
     pub fn new() -> Self {
         Self {
             background: tiny_skia::Color::WHITE,
-            text_renderer: TextRenderer::new(),
+            text_renderer: RefCell::new(TextRenderer::new()),
         }
     }
 
@@ -46,7 +53,7 @@ impl NativeBackend {
     pub fn with_background(r: u8, g: u8, b: u8) -> Self {
         Self {
             background: tiny_skia::Color::from_rgba8(r, g, b, 255),
-            text_renderer: TextRenderer::new(),
+            text_renderer: RefCell::new(TextRenderer::new()),
         }
     }
 
@@ -373,7 +380,7 @@ impl NativeBackend {
         // Render the text
         // Note: CTM is already applied in the transform calculation above,
         // so we pass identity transform to the text renderer
-        self.text_renderer.render_text_with_advances(
+        self.text_renderer.borrow().render_text_with_advances(
             text_bytes,
             font_name,
             font_size,
@@ -383,6 +390,41 @@ impl NativeBackend {
             &paint,
             pixmap,
         );
+    }
+
+    /// Register fonts extracted from a PDF page
+    fn register_page_fonts<R: std::io::Read + std::io::Seek>(
+        &self,
+        page: &oxidize_pdf::parser::page_tree::ParsedPage,
+        document: &PdfDocument<R>,
+    ) {
+        let fonts = extract_page_fonts(page, document);
+
+        for (name, extracted) in fonts {
+            // Only register fonts that have embedded data and are TrueType or CFF
+            if let Some(data) = extracted.font_data {
+                match extracted.font_file_type {
+                    FontFileType::TrueType | FontFileType::CFF => {
+                        #[cfg(debug_assertions)]
+                        eprintln!(
+                            "[NativeBackend] Registering embedded font: {} ({:?}, {} bytes)",
+                            name,
+                            extracted.font_file_type,
+                            data.len()
+                        );
+                        self.text_renderer.borrow_mut().register_font(&name, data);
+                    }
+                    FontFileType::Type1 => {
+                        #[cfg(debug_assertions)]
+                        eprintln!(
+                            "[NativeBackend] Skipping Type1 font (not supported): {}",
+                            name
+                        );
+                    }
+                    FontFileType::None => {}
+                }
+            }
+        }
     }
 }
 
@@ -412,6 +454,9 @@ impl PageRenderer for NativeBackend {
         let page = document
             .get_page(page_idx)
             .map_err(|_| RenderError::PageNotFound(page_index))?;
+
+        // Extract and register embedded fonts from the page
+        self.register_page_fonts(&page, &document);
 
         // Get dimensions from page
         let width = page.width() as f32;
