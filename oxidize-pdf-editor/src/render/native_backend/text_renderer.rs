@@ -2,7 +2,14 @@
 //!
 //! This module handles rendering PDF text operations using the skrifa font library.
 //! It converts glyph outlines to tiny-skia paths for rasterization.
+//!
+//! ## ToUnicode Support
+//!
+//! PDF fonts often use custom encodings where bytes in the content stream don't
+//! directly correspond to Unicode characters. When a ToUnicode CMap is available,
+//! we use it to map character codes to Unicode before looking up glyphs.
 
+use super::font_extractor::ToUnicodeMap;
 use skrifa::outline::{DrawSettings, OutlinePen};
 use skrifa::prelude::*;
 use skrifa::raw::TableProvider;
@@ -91,20 +98,44 @@ pub struct CachedFont {
     #[allow(dead_code)]
     data: Vec<u8>,
     /// Units per em (for scaling)
+    #[allow(dead_code)]
     units_per_em: u16,
+    /// ToUnicode mapping for character code to Unicode conversion
+    to_unicode: Option<ToUnicodeMap>,
+    /// Byte width for character codes (from ToUnicode CMap)
+    code_byte_width: u8,
 }
 
 impl CachedFont {
     /// Create a new cached font from raw data
     pub fn from_data(data: Vec<u8>) -> Option<Self> {
+        Self::from_data_with_encoding(data, None)
+    }
+
+    /// Create a new cached font with optional ToUnicode mapping
+    pub fn from_data_with_encoding(data: Vec<u8>, to_unicode: Option<ToUnicodeMap>) -> Option<Self> {
         // Validate we can parse it
         let font = FontRef::new(&data).ok()?;
         let units_per_em = font.head().ok()?.units_per_em();
 
-        #[cfg(debug_assertions)]
-        eprintln!("[CachedFont] Created font with {} upem", units_per_em);
+        // Extract byte width from ToUnicode map
+        let code_byte_width = to_unicode.as_ref().map(|m| m.code_byte_width()).unwrap_or(1);
 
-        Some(Self { data, units_per_em })
+        #[cfg(debug_assertions)]
+        {
+            let has_map = to_unicode.as_ref().map(|m| m.len()).unwrap_or(0);
+            eprintln!(
+                "[CachedFont] Created font with {} upem, {} ToUnicode mappings, code_byte_width={}",
+                units_per_em, has_map, code_byte_width
+            );
+        }
+
+        Some(Self {
+            data,
+            units_per_em,
+            to_unicode,
+            code_byte_width,
+        })
     }
 
     /// Get a FontRef for rendering (requires data to be alive)
@@ -113,8 +144,24 @@ impl CachedFont {
     }
 
     /// Get the scale factor for a given font size in points
+    #[allow(dead_code)]
     pub fn scale_for_size(&self, size_points: f32) -> f32 {
         size_points / self.units_per_em as f32
+    }
+
+    /// Check if this font has a ToUnicode mapping
+    pub fn has_to_unicode(&self) -> bool {
+        self.to_unicode.is_some()
+    }
+
+    /// Get the byte width for character codes
+    pub fn code_byte_width(&self) -> u8 {
+        self.code_byte_width
+    }
+
+    /// Look up a character code in the ToUnicode map
+    pub fn to_unicode(&self, code: u32) -> Option<&str> {
+        self.to_unicode.as_ref()?.get(code)
     }
 }
 
@@ -172,7 +219,17 @@ impl TextRenderer {
 
     /// Register a font with the renderer
     pub fn register_font(&mut self, name: &str, data: Vec<u8>) {
-        if let Some(font) = CachedFont::from_data(data) {
+        self.register_font_with_encoding(name, data, None);
+    }
+
+    /// Register a font with optional ToUnicode mapping
+    pub fn register_font_with_encoding(
+        &mut self,
+        name: &str,
+        data: Vec<u8>,
+        to_unicode: Option<ToUnicodeMap>,
+    ) {
+        if let Some(font) = CachedFont::from_data_with_encoding(data, to_unicode) {
             self.font_cache.insert(name.to_string(), font);
         }
     }
@@ -273,16 +330,6 @@ impl TextRenderer {
         paint: &Paint,
         pixmap: &mut Pixmap,
     ) {
-        #[cfg(debug_assertions)]
-        eprintln!(
-            "[TextRenderer] render_text_with_advances: font={}, size={}, pos=({}, {}), text={:?}",
-            font_name,
-            font_size,
-            x,
-            y,
-            String::from_utf8_lossy(text)
-        );
-
         let Some(cached_font) = self.get_font(font_name) else {
             #[cfg(debug_assertions)]
             eprintln!("[TextRenderer] No font found for: {}", font_name);
@@ -293,6 +340,20 @@ impl TextRenderer {
             return;
         };
 
+        // Decode text using ToUnicode map if available
+        let decoded_text = self.decode_text(text, cached_font);
+
+        #[cfg(debug_assertions)]
+        eprintln!(
+            "[TextRenderer] render_text_with_advances: font={}, size={}, pos=({}, {}), has_to_unicode={}, decoded={:?}",
+            font_name,
+            font_size,
+            x,
+            y,
+            cached_font.has_to_unicode(),
+            decoded_text
+        );
+
         let charmap = font.charmap();
         let outlines = font.outline_glyphs();
 
@@ -300,14 +361,14 @@ impl TextRenderer {
         let glyph_metrics = font.glyph_metrics(Size::new(font_size), LocationRef::default());
 
         let mut cursor_x = x;
-
         let mut glyphs_drawn = 0;
 
-        for &byte in text {
-            let ch = byte as char;
+        for ch in decoded_text.chars() {
             let Some(glyph_id) = charmap.map(ch) else {
                 #[cfg(debug_assertions)]
-                eprintln!("[TextRenderer] No glyph for char: {:?}", ch);
+                if glyphs_drawn == 0 {
+                    eprintln!("[TextRenderer] No glyph for char: {:?} (U+{:04X})", ch, ch as u32);
+                }
                 cursor_x += font_size * 0.6;
                 continue;
             };
@@ -349,6 +410,76 @@ impl TextRenderer {
 
         #[cfg(debug_assertions)]
         eprintln!("[TextRenderer] Drew {} glyphs", glyphs_drawn);
+    }
+
+    /// Decode text bytes using ToUnicode map if available
+    ///
+    /// If the font has a ToUnicode map, each byte (or multi-byte sequence)
+    /// is looked up to get the corresponding Unicode string. Otherwise,
+    /// bytes are interpreted as ASCII.
+    fn decode_text(&self, text: &[u8], cached_font: &CachedFont) -> String {
+        if !cached_font.has_to_unicode() {
+            // No ToUnicode map - treat as ASCII
+            return text.iter().map(|&b| b as char).collect();
+        }
+
+        let byte_width = cached_font.code_byte_width();
+
+        #[cfg(debug_assertions)]
+        {
+            let hex: Vec<String> = text.iter().map(|b| format!("{:02X}", b)).collect();
+            eprintln!(
+                "[decode_text] Raw bytes: [{}], byte_width={}",
+                hex.join(" "),
+                byte_width
+            );
+        }
+
+        let mut result = String::new();
+        let mut i = 0;
+
+        while i < text.len() {
+            if byte_width == 2 && i + 1 < text.len() {
+                // 2-byte codes: combine two bytes into one code
+                let code = ((text[i] as u32) << 8) | (text[i + 1] as u32);
+                if let Some(unicode) = cached_font.to_unicode(code) {
+                    #[cfg(debug_assertions)]
+                    if result.is_empty() {
+                        eprintln!("[decode_text] 2-byte code 0x{:04X} -> {:?}", code, unicode);
+                    }
+                    result.push_str(unicode);
+                } else {
+                    #[cfg(debug_assertions)]
+                    if result.is_empty() {
+                        eprintln!("[decode_text] No mapping for 2-byte code 0x{:04X}", code);
+                    }
+                }
+                i += 2;
+            } else {
+                // 1-byte codes
+                let code = text[i] as u32;
+                if let Some(unicode) = cached_font.to_unicode(code) {
+                    #[cfg(debug_assertions)]
+                    if result.is_empty() {
+                        eprintln!("[decode_text] 1-byte code 0x{:02X} -> {:?}", code, unicode);
+                    }
+                    result.push_str(unicode);
+                } else {
+                    // Fall back to treating the byte as a character
+                    #[cfg(debug_assertions)]
+                    if result.is_empty() {
+                        eprintln!("[decode_text] No mapping for 1-byte code 0x{:02X}", code);
+                    }
+                    // Don't add null or control characters
+                    if text[i] >= 0x20 {
+                        result.push(text[i] as char);
+                    }
+                }
+                i += 1;
+            }
+        }
+
+        result
     }
 }
 

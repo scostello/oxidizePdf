@@ -406,13 +406,23 @@ impl NativeBackend {
                 match extracted.font_file_type {
                     FontFileType::TrueType | FontFileType::CFF => {
                         #[cfg(debug_assertions)]
-                        eprintln!(
-                            "[NativeBackend] Registering embedded font: {} ({:?}, {} bytes)",
-                            name,
-                            extracted.font_file_type,
-                            data.len()
-                        );
-                        self.text_renderer.borrow_mut().register_font(&name, data);
+                        {
+                            let to_unicode_count = extracted
+                                .to_unicode
+                                .as_ref()
+                                .map(|m| m.len())
+                                .unwrap_or(0);
+                            eprintln!(
+                                "[NativeBackend] Registering embedded font: {} ({:?}, {} bytes, {} ToUnicode mappings)",
+                                name,
+                                extracted.font_file_type,
+                                data.len(),
+                                to_unicode_count
+                            );
+                        }
+                        self.text_renderer
+                            .borrow_mut()
+                            .register_font_with_encoding(&name, data, extracted.to_unicode);
                     }
                     FontFileType::Type1 => {
                         #[cfg(debug_assertions)]
@@ -421,7 +431,40 @@ impl NativeBackend {
                             name
                         );
                     }
-                    FontFileType::None => {}
+                    FontFileType::None => {
+                        // No embedded font data, but we might have a ToUnicode map
+                        // This happens with standard fonts that have custom encodings
+                        if extracted.to_unicode.is_some() {
+                            #[cfg(debug_assertions)]
+                            {
+                                let to_unicode_count = extracted
+                                    .to_unicode
+                                    .as_ref()
+                                    .map(|m| m.len())
+                                    .unwrap_or(0);
+                                eprintln!(
+                                    "[NativeBackend] Font {} has ToUnicode map ({} mappings) but no embedded data",
+                                    name, to_unicode_count
+                                );
+                            }
+                            // We can't register without font data, but we should note this
+                            // In the future, we could store the ToUnicode map separately
+                        }
+                    }
+                }
+            } else if extracted.to_unicode.is_some() {
+                // Font has ToUnicode but no embedded data
+                #[cfg(debug_assertions)]
+                {
+                    let to_unicode_count = extracted
+                        .to_unicode
+                        .as_ref()
+                        .map(|m| m.len())
+                        .unwrap_or(0);
+                    eprintln!(
+                        "[NativeBackend] Font {} has ToUnicode map ({} mappings) but no embedded font data - will use fallback",
+                        name, to_unicode_count
+                    );
                 }
             }
         }
