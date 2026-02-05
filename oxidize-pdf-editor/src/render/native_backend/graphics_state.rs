@@ -240,17 +240,18 @@ mod tests {
     fn test_color_rgb() {
         let mut state = GraphicsState::new();
         state.set_fill_rgb(1.0, 0.0, 0.0);
-        assert_eq!(state.fill_color.red(), 255);
-        assert_eq!(state.fill_color.green(), 0);
-        assert_eq!(state.fill_color.blue(), 0);
+        // tiny_skia::Color uses f32 values (0.0-1.0)
+        assert!((state.fill_color.red() - 1.0).abs() < 0.01);
+        assert!(state.fill_color.green().abs() < 0.01);
+        assert!(state.fill_color.blue().abs() < 0.01);
     }
 
     #[test]
     fn test_color_gray() {
         let mut state = GraphicsState::new();
         state.set_fill_gray(0.5);
-        // Gray 0.5 = RGB(127, 127, 127) approximately
-        assert!(state.fill_color.red() > 120 && state.fill_color.red() < 135);
+        // Gray 0.5 = RGB(0.5, 0.5, 0.5)
+        assert!((state.fill_color.red() - 0.5).abs() < 0.01);
     }
 
     #[test]

@@ -8,7 +8,9 @@ use super::path_builder::PdfPathBuilder;
 use super::{PageRenderer, RenderError};
 
 use oxidize_pdf::parser::content::{ContentOperation, ContentParser};
-use oxidize_pdf::PdfReader;
+use oxidize_pdf::parser::{PdfDocument, PdfReader};
+use std::fs::File;
+use std::io::BufReader;
 use std::path::Path;
 use tiny_skia::{FillRule, Paint, Pixmap, Stroke, Transform};
 
@@ -45,7 +47,6 @@ impl NativeBackend {
     }
 
     /// Render a content stream to a pixmap
-    #[allow(dead_code)]
     fn render_content(
         &self,
         operations: &[ContentOperation],
@@ -247,19 +248,23 @@ impl PageRenderer for NativeBackend {
         page_index: usize,
         scale: f32,
     ) -> Result<image::RgbaImage, RenderError> {
-        // Open PDF with oxidize-pdf
-        let mut reader = PdfReader::open(pdf_path)
+        // Open PDF with oxidize-pdf using PdfDocument (not PdfReader directly)
+        let file = File::open(pdf_path)
             .map_err(|e| RenderError::LoadError(e.to_string()))?;
+        let buf_reader = BufReader::new(file);
+        let reader = PdfReader::new(buf_reader)
+            .map_err(|e| RenderError::LoadError(e.to_string()))?;
+        let document = PdfDocument::new(reader);
 
-        // Get page dimensions
+        // Get page
         let page_idx = page_index as u32;
-        let page = reader
+        let page = document
             .get_page(page_idx)
             .map_err(|_| RenderError::PageNotFound(page_index))?;
 
-        let media_box = page.media_box;
-        let width = (media_box[2] - media_box[0]).abs() as f32;
-        let height = (media_box[3] - media_box[1]).abs() as f32;
+        // Get dimensions from page
+        let width = page.width() as f32;
+        let height = page.height() as f32;
 
         // Calculate pixel dimensions
         let pixel_width = (width * scale) as u32;
@@ -272,9 +277,25 @@ impl PageRenderer for NativeBackend {
         // Fill with background
         pixmap.fill(self.background);
 
-        // TODO: Content stream rendering requires resolving borrow checker issues
-        // with PdfReader API. For now, render blank page with correct dimensions.
-        // Next step: Use document.get_page_content_streams() pattern
+        // Build transform: scale + flip Y for PDF coordinate system
+        // PDF origin is bottom-left, pixmap origin is top-left
+        let base_transform = Transform::from_row(
+            scale,
+            0.0,
+            0.0,
+            -scale,
+            0.0,
+            pixel_height as f32,
+        );
+
+        // Get and parse content streams
+        if let Ok(streams) = page.content_streams_with_document(&document) {
+            for stream_data in streams {
+                if let Ok(operations) = ContentParser::parse(&stream_data) {
+                    self.render_content(&operations, &mut pixmap, base_transform);
+                }
+            }
+        }
 
         // Convert pixmap to image::RgbaImage
         let data = pixmap.data().to_vec();
@@ -287,25 +308,26 @@ impl PageRenderer for NativeBackend {
         pdf_path: &Path,
         page_index: usize,
     ) -> Result<(f32, f32), RenderError> {
-        let mut reader = PdfReader::open(pdf_path)
+        let file = File::open(pdf_path)
             .map_err(|e| RenderError::LoadError(e.to_string()))?;
+        let buf_reader = BufReader::new(file);
+        let reader = PdfReader::new(buf_reader)
+            .map_err(|e| RenderError::LoadError(e.to_string()))?;
+        let document = PdfDocument::new(reader);
 
         let page_idx = page_index as u32;
-        let page = reader
+        let page = document
             .get_page(page_idx)
             .map_err(|_| RenderError::PageNotFound(page_index))?;
 
-        let media_box = page.media_box;
-        let width = (media_box[2] - media_box[0]).abs() as f32;
-        let height = (media_box[3] - media_box[1]).abs() as f32;
-
-        Ok((width, height))
+        Ok((page.width() as f32, page.height() as f32))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use oxidize_pdf::parser::content::ContentOperation;
 
     #[test]
     fn test_native_backend_creation() {
@@ -316,6 +338,126 @@ mod tests {
     #[test]
     fn test_custom_background() {
         let backend = NativeBackend::with_background(200, 200, 200);
-        assert_eq!(backend.background.red(), 200);
+        // tiny_skia::Color uses f32 values (0.0-1.0), 200/255 ≈ 0.784
+        assert!((backend.background.red() - 200.0 / 255.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_render_rectangle() {
+        let backend = NativeBackend::new();
+        let mut pixmap = Pixmap::new(100, 100).unwrap();
+        pixmap.fill(tiny_skia::Color::WHITE);
+
+        // Create operations for a black filled rectangle
+        let operations = vec![
+            ContentOperation::SetNonStrokingGray(0.0), // Black fill
+            ContentOperation::Rectangle(10.0, 10.0, 30.0, 30.0),
+            ContentOperation::Fill,
+        ];
+
+        // Transform: scale 1.0, flip Y (origin at bottom-left)
+        let transform = Transform::from_row(1.0, 0.0, 0.0, -1.0, 0.0, 100.0);
+        backend.render_content(&operations, &mut pixmap, transform);
+
+        // Check that we rendered something (pixel at center of rectangle should be black)
+        // The rectangle is at (10, 10) with size (30, 30), center at ~(25, 25) in PDF coords
+        // After Y flip: y = 100 - 25 = 75 in pixmap coords
+        let pixel = pixmap.pixel(25, 75).unwrap();
+        assert_eq!(pixel.red(), 0, "Rectangle center should be black");
+        assert_eq!(pixel.green(), 0);
+        assert_eq!(pixel.blue(), 0);
+    }
+
+    #[test]
+    fn test_render_stroked_path() {
+        let backend = NativeBackend::new();
+        let mut pixmap = Pixmap::new(100, 100).unwrap();
+        pixmap.fill(tiny_skia::Color::WHITE);
+
+        // Create operations for a red stroked line
+        let operations = vec![
+            ContentOperation::SetStrokingRGB(1.0, 0.0, 0.0), // Red stroke
+            ContentOperation::SetLineWidth(4.0),
+            ContentOperation::MoveTo(10.0, 50.0),
+            ContentOperation::LineTo(90.0, 50.0),
+            ContentOperation::Stroke,
+        ];
+
+        let transform = Transform::from_row(1.0, 0.0, 0.0, -1.0, 0.0, 100.0);
+        backend.render_content(&operations, &mut pixmap, transform);
+
+        // Check pixel in the middle of the line (y = 100 - 50 = 50 in pixmap)
+        let pixel = pixmap.pixel(50, 50).unwrap();
+        assert!(pixel.red() > 200, "Line should be red (r={})", pixel.red());
+        assert!(pixel.green() < 50, "Line should be red (g={})", pixel.green());
+    }
+
+    #[test]
+    fn test_graphics_state_save_restore() {
+        let backend = NativeBackend::new();
+        let mut pixmap = Pixmap::new(100, 100).unwrap();
+        pixmap.fill(tiny_skia::Color::WHITE);
+
+        // Draw nested graphics states with different colors
+        let operations = vec![
+            ContentOperation::SetNonStrokingGray(0.0), // Black
+            ContentOperation::SaveGraphicsState,
+            ContentOperation::SetNonStrokingRGB(1.0, 0.0, 0.0), // Red
+            ContentOperation::Rectangle(40.0, 40.0, 20.0, 20.0),
+            ContentOperation::Fill,
+            ContentOperation::RestoreGraphicsState,
+            // After restore, should be back to black
+            ContentOperation::Rectangle(10.0, 10.0, 20.0, 20.0),
+            ContentOperation::Fill,
+        ];
+
+        let transform = Transform::from_row(1.0, 0.0, 0.0, -1.0, 0.0, 100.0);
+        backend.render_content(&operations, &mut pixmap, transform);
+
+        // Check red rectangle (center at 50, 50 -> y = 100 - 50 = 50)
+        let red_pixel = pixmap.pixel(50, 50).unwrap();
+        assert!(red_pixel.red() > 200, "Should be red");
+
+        // Check black rectangle (center at 20, 20 -> y = 100 - 20 = 80)
+        let black_pixel = pixmap.pixel(20, 80).unwrap();
+        assert_eq!(black_pixel.red(), 0, "Should be black");
+    }
+
+    #[test]
+    fn test_transform_matrix() {
+        let backend = NativeBackend::new();
+        let mut pixmap = Pixmap::new(200, 200).unwrap();
+        pixmap.fill(tiny_skia::Color::WHITE);
+
+        // Draw a rectangle with a scale transform
+        // The transform is applied to subsequent path operations
+        let operations = vec![
+            ContentOperation::SetNonStrokingGray(0.0),
+            ContentOperation::SetTransformMatrix(2.0, 0.0, 0.0, 2.0, 0.0, 0.0), // 2x scale
+            ContentOperation::Rectangle(20.0, 20.0, 40.0, 40.0), // With 2x scale: 40,40 to 120,120
+            ContentOperation::Fill,
+        ];
+
+        // Use identity base transform for this test (no flip)
+        let transform = Transform::from_row(1.0, 0.0, 0.0, 1.0, 0.0, 0.0);
+        backend.render_content(&operations, &mut pixmap, transform);
+
+        // After 2x scale, rectangle at (20,20,40,40) becomes (40,40,80,80)
+        // Check that there are some non-white pixels in the rendered area
+        let mut found_black = false;
+        for y in 40..120 {
+            for x in 40..120 {
+                if let Some(pixel) = pixmap.pixel(x, y) {
+                    if pixel.red() == 0 {
+                        found_black = true;
+                        break;
+                    }
+                }
+            }
+            if found_black {
+                break;
+            }
+        }
+        assert!(found_black, "Transformed rectangle should contain black pixels");
     }
 }
