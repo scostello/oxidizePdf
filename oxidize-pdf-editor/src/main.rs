@@ -1,5 +1,6 @@
 mod app;
 mod pdf;
+mod render;
 mod ui;
 
 fn main() -> iced::Result {

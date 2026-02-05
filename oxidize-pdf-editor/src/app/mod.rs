@@ -2,6 +2,7 @@ pub mod message;
 pub mod state;
 
 use crate::pdf::{DocumentHandle, DocumentMetadata};
+use crate::render::{PageRenderer, PdfiumBackend};
 use crate::ui;
 use iced::{Element, Task, Theme};
 use message::Message;
@@ -55,6 +56,7 @@ pub fn update(editor: &mut PdfEditor, message: Message) -> Task<Message> {
             // Load document asynchronously
             editor.state.is_loading = true;
             editor.state.error_message = None;
+            editor.state.pdf_path = Some(path.clone());
 
             Task::perform(load_document_async(path), Message::DocumentLoaded)
         }
@@ -69,7 +71,19 @@ pub fn update(editor: &mut PdfEditor, message: Message) -> Task<Message> {
             editor.state.total_pages = metadata.page_count;
             editor.state.current_document = Some(metadata);
             editor.state.current_page_index = 0;
-            Task::none()
+
+            // Trigger initial page render
+            if let Some(path) = editor.state.pdf_path.clone() {
+                editor.state.is_rendering = true;
+                let page_index = editor.state.current_page_index;
+                let zoom = editor.state.zoom_level;
+                Task::perform(
+                    render_page_async(path, page_index, zoom),
+                    Message::PageRendered,
+                )
+            } else {
+                Task::none()
+            }
         }
 
         Message::DocumentLoaded(Err(error)) => {
@@ -84,6 +98,7 @@ pub fn update(editor: &mut PdfEditor, message: Message) -> Task<Message> {
         Message::NextPage => {
             if editor.state.can_go_next() {
                 editor.state.current_page_index += 1;
+                return trigger_render(editor);
             }
             Task::none()
         }
@@ -91,6 +106,7 @@ pub fn update(editor: &mut PdfEditor, message: Message) -> Task<Message> {
         Message::PreviousPage => {
             if editor.state.can_go_previous() {
                 editor.state.current_page_index = editor.state.current_page_index.saturating_sub(1);
+                return trigger_render(editor);
             }
             Task::none()
         }
@@ -98,9 +114,59 @@ pub fn update(editor: &mut PdfEditor, message: Message) -> Task<Message> {
         Message::GoToPage(index) => {
             if index < editor.state.total_pages {
                 editor.state.current_page_index = index;
+                return trigger_render(editor);
             }
             Task::none()
         }
+
+        Message::PageRendered(Ok(handle)) => {
+            editor.state.is_rendering = false;
+            editor.state.rendered_page = Some(handle);
+            Task::none()
+        }
+
+        Message::PageRendered(Err(error)) => {
+            editor.state.is_rendering = false;
+            tracing::error!("Failed to render page: {}", error);
+            editor.state.error_message = Some(format!("Render error: {}", error));
+            Task::none()
+        }
+
+        Message::ZoomIn => {
+            if editor.state.can_zoom_in() {
+                editor.state.zoom_level = editor.state.next_zoom_level();
+                return trigger_render(editor);
+            }
+            Task::none()
+        }
+
+        Message::ZoomOut => {
+            if editor.state.can_zoom_out() {
+                editor.state.zoom_level = editor.state.prev_zoom_level();
+                return trigger_render(editor);
+            }
+            Task::none()
+        }
+
+        Message::ZoomSet(level) => {
+            editor.state.zoom_level = level;
+            trigger_render(editor)
+        }
+    }
+}
+
+/// Trigger a page render
+fn trigger_render(editor: &mut PdfEditor) -> Task<Message> {
+    if let Some(path) = editor.state.pdf_path.clone() {
+        editor.state.is_rendering = true;
+        let page_index = editor.state.current_page_index;
+        let zoom = editor.state.zoom_level;
+        Task::perform(
+            render_page_async(path, page_index, zoom),
+            Message::PageRendered,
+        )
+    } else {
+        Task::none()
     }
 }
 
@@ -130,4 +196,30 @@ async fn load_document_async(path: PathBuf) -> Result<DocumentMetadata, String> 
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
+}
+
+/// Render a page asynchronously
+async fn render_page_async(
+    path: PathBuf,
+    page_index: usize,
+    zoom: f32,
+) -> Result<iced::widget::image::Handle, String> {
+    tokio::task::spawn_blocking(move || {
+        let backend = PdfiumBackend::new();
+        let image = backend
+            .render_page(&path, page_index, zoom)
+            .map_err(|e| e.to_string())?;
+
+        // Convert to iced image handle
+        let (width, height) = image.dimensions();
+        let handle = iced::widget::image::Handle::from_rgba(
+            width,
+            height,
+            image.into_raw(),
+        );
+
+        Ok(handle)
+    })
+    .await
+    .map_err(|e| format!("Render task failed: {}", e))?
 }

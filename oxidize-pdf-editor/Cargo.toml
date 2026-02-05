@@ -13,8 +13,14 @@ publish = false  # Not ready for public release - still in development (Phase 1 
 # PDF processing
 oxidize-pdf = { path = "../oxidize-pdf-core" }
 
+# PDF rendering
+pdfium-render = { version = "0.8", features = ["image"] }
+
 # GUI framework
 iced = { version = "0.14.0", features = ["tokio", "image"] }
+
+# Image handling
+image = "0.25"
 
 # Async runtime
 tokio = { version = "1.49.0", features = ["full"] }

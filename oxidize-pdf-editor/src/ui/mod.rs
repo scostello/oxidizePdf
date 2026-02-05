@@ -1,5 +1,5 @@
 use crate::app::{message::Message, state::EditorState};
-use iced::widget::{button, column, container, row, text, Column};
+use iced::widget::{button, column, container, image, row, scrollable, text, Column};
 use iced::{Element, Length};
 
 /// Create the main view for the application
@@ -65,24 +65,27 @@ fn error_view(error: &str) -> Element<'_, Message> {
 fn document_view(state: &EditorState) -> Element<'_, Message> {
     let doc = state.current_document.as_ref().unwrap();
 
-    // Create metadata section
-    let mut metadata_column = Column::new().spacing(10).padding(20);
+    // Create zoom controls
+    let zoom_out_btn = button("-").on_press_maybe(if state.can_zoom_out() {
+        Some(Message::ZoomOut)
+    } else {
+        None
+    });
 
-    metadata_column = metadata_column.push(text(format!("File: {}", doc.filename())).size(18));
+    let zoom_in_btn = button("+").on_press_maybe(if state.can_zoom_in() {
+        Some(Message::ZoomIn)
+    } else {
+        None
+    });
 
-    if let Some(title) = &doc.title {
-        metadata_column = metadata_column.push(text(format!("Title: {}", title)));
-    }
+    let zoom_display = text(format!("{}%", state.zoom_percentage()));
 
-    if let Some(author) = &doc.author {
-        metadata_column = metadata_column.push(text(format!("Author: {}", author)));
-    }
-
-    metadata_column = metadata_column.push(text(format!("Pages: {}", state.total_pages)));
-    metadata_column = metadata_column.push(text(format!("Version: {}", doc.version)));
+    let zoom_controls = row![zoom_out_btn, zoom_display, zoom_in_btn]
+        .spacing(5)
+        .align_y(iced::Alignment::Center);
 
     // Create navigation controls
-    let prev_button = button("◀ Previous").on_press_maybe(if state.can_go_previous() {
+    let prev_button = button("◀ Prev").on_press_maybe(if state.can_go_previous() {
         Some(Message::PreviousPage)
     } else {
         None
@@ -100,46 +103,58 @@ fn document_view(state: &EditorState) -> Element<'_, Message> {
         state.total_pages
     ));
 
-    let navigation = row![
+    // Toolbar with navigation and zoom
+    let toolbar = row![
         prev_button,
-        container(page_info)
-            .width(Length::Fill)
-            .center_x(Length::Fill),
-        next_button
+        page_info,
+        next_button,
+        container(row![]).width(Length::Fill), // Spacer
+        zoom_controls,
+        button("Open").on_press(Message::OpenFile)
     ]
     .spacing(10)
-    .padding(10);
+    .padding(10)
+    .align_y(iced::Alignment::Center);
 
-    // Main layout
-    container(
-        column![
-            // Header
-            row![
-                text("oxidizePdf Editor").size(24),
-                container(button("Open Another PDF").on_press(Message::OpenFile))
-                    .width(Length::Fill)
-                    .align_x(iced::alignment::Horizontal::Right)
-            ]
-            .padding(10)
-            .spacing(10),
-            // Metadata section
-            metadata_column,
-            // Page content placeholder
-            container(
-                text(format!(
-                    "Page {} content would be displayed here",
-                    state.current_page_display()
-                ))
-                .size(14)
-            )
+    // Page content - either rendered image or loading indicator
+    let page_content: Element<'_, Message> = if state.is_rendering {
+        container(text("Rendering...").size(18))
             .width(Length::Fill)
             .height(Length::Fill)
             .center_x(Length::Fill)
-            .center_y(Length::Fill),
-            // Navigation controls
-            navigation
-        ]
-        .spacing(10),
+            .center_y(Length::Fill)
+            .into()
+    } else if let Some(handle) = &state.rendered_page {
+        // Show rendered page in a scrollable container for pan
+        scrollable(
+            container(image(handle.clone()))
+                .padding(20)
+                .center_x(Length::Fill),
+        )
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
+    } else {
+        container(text("No page rendered").size(14))
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .center_x(Length::Fill)
+            .center_y(Length::Fill)
+            .into()
+    };
+
+    // Info bar at bottom
+    let info_bar = row![
+        text(format!("File: {}", doc.filename())).size(12),
+        container(row![]).width(Length::Fill), // Spacer
+        text(format!("PDF {}", doc.version)).size(12),
+    ]
+    .spacing(10)
+    .padding(5);
+
+    // Main layout
+    container(
+        column![toolbar, page_content, info_bar].spacing(0),
     )
     .width(Length::Fill)
     .height(Length::Fill)

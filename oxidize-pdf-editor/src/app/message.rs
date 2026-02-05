@@ -21,4 +21,16 @@ pub enum Message {
     /// Go to specific page (0-based index)
     #[allow(dead_code)]
     GoToPage(usize),
+
+    /// Page was rendered (contains image handle or error)
+    PageRendered(Result<iced::widget::image::Handle, String>),
+
+    /// Zoom in one step
+    ZoomIn,
+
+    /// Zoom out one step
+    ZoomOut,
+
+    /// Set zoom to specific level
+    ZoomSet(f32),
 }
