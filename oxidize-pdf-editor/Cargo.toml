@@ -9,12 +9,21 @@ repository.workspace = true
 homepage.workspace = true
 publish = false  # Not ready for public release - still in development (Phase 1 of 8)
 
+[features]
+default = ["pdfium-render"]
+pdfium-render = ["dep:pdfium-render"]
+native-render = ["dep:tiny-skia", "dep:skrifa"]
+
 [dependencies]
 # PDF processing
 oxidize-pdf = { path = "../oxidize-pdf-core" }
 
-# PDF rendering
-pdfium-render = { version = "0.8", features = ["image"] }
+# PDF rendering - pdfium backend (default)
+pdfium-render = { version = "0.8", features = ["image"], optional = true }
+
+# PDF rendering - native backend (pure Rust)
+tiny-skia = { version = "0.11", optional = true }
+skrifa = { version = "0.26", optional = true }
 
 # GUI framework
 iced = { version = "0.14.0", features = ["tokio", "image"] }

@@ -1,11 +1,28 @@
 //! PDF page rendering module
 //!
 //! This module provides a trait-based abstraction for rendering PDF pages to bitmaps.
-//! Currently uses pdfium-render, with a future pure-Rust backend planned.
+//!
+//! # Backends
+//!
+//! - `pdfium-render` (default): High-quality rendering via Google's PDFium library
+//! - `native-render`: Pure Rust rendering via tiny-skia + skrifa (experimental)
+//!
+//! # Feature Flags
+//!
+//! - `pdfium-render`: Enable PDFium backend (default)
+//! - `native-render`: Enable native Rust backend
 
+#[cfg(feature = "pdfium-render")]
 mod pdfium_backend;
 
+#[cfg(feature = "native-render")]
+mod native_backend;
+
+#[cfg(feature = "pdfium-render")]
 pub use pdfium_backend::PdfiumBackend;
+
+#[cfg(feature = "native-render")]
+pub use native_backend::NativeBackend;
 
 use std::path::Path;
 use thiserror::Error;
