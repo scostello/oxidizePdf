@@ -11,21 +11,24 @@ use std::collections::HashMap;
 use tiny_skia::{Paint, Path, PathBuilder, Pixmap, Transform};
 
 /// Pen implementation that builds tiny-skia paths from glyph outlines
+///
+/// Note: skrifa's DrawSettings already scales glyph coordinates to the target size,
+/// so we only need to apply offset and Y-flip here.
 pub struct TinySkiaPen {
     builder: PathBuilder,
-    /// Scale factor to convert font units to user space
-    scale: f32,
     /// Offset for positioning
     offset_x: f32,
     offset_y: f32,
 }
 
 impl TinySkiaPen {
-    /// Create a new pen with the given scale and offset
-    pub fn new(scale: f32, offset_x: f32, offset_y: f32) -> Self {
+    /// Create a new pen with the given offset
+    ///
+    /// The glyph coordinates from skrifa are already scaled to the target font size,
+    /// so we only apply position offset and Y-axis flip.
+    pub fn new(offset_x: f32, offset_y: f32) -> Self {
         Self {
             builder: PathBuilder::new(),
-            scale,
             offset_x,
             offset_y,
         }
@@ -36,12 +39,14 @@ impl TinySkiaPen {
         self.builder.finish()
     }
 
-    /// Transform a point from font units to user space
+    /// Transform a point from skrifa coordinates to pixmap coordinates
+    ///
+    /// skrifa coordinates have Y pointing up, pixmap has Y pointing down.
     fn transform(&self, x: f32, y: f32) -> (f32, f32) {
         (
-            x * self.scale + self.offset_x,
-            // Flip Y axis - font coordinates have Y up, tiny-skia has Y down
-            -y * self.scale + self.offset_y,
+            x + self.offset_x,
+            // Flip Y axis - skrifa has Y up, tiny-skia has Y down
+            -y + self.offset_y,
         )
     }
 }
@@ -49,6 +54,11 @@ impl TinySkiaPen {
 impl OutlinePen for TinySkiaPen {
     fn move_to(&mut self, x: f32, y: f32) {
         let (tx, ty) = self.transform(x, y);
+        #[cfg(debug_assertions)]
+        if self.builder.len() == 0 {
+            // Only log the first point
+            eprintln!("[TinySkiaPen] First move_to: ({}, {}) -> ({}, {})", x, y, tx, ty);
+        }
         self.builder.move_to(tx, ty);
     }
 
@@ -90,6 +100,9 @@ impl CachedFont {
         // Validate we can parse it
         let font = FontRef::new(&data).ok()?;
         let units_per_em = font.head().ok()?.units_per_em();
+
+        #[cfg(debug_assertions)]
+        eprintln!("[CachedFont] Created font with {} upem", units_per_em);
 
         Some(Self { data, units_per_em })
     }
@@ -145,11 +158,16 @@ impl TextRenderer {
         for path in fallback_paths {
             if let Ok(data) = std::fs::read(path) {
                 if let Some(font) = CachedFont::from_data(data) {
+                    #[cfg(debug_assertions)]
+                    eprintln!("[TextRenderer] Loaded fallback font from: {}", path);
                     self.fallback_font = Some(font);
                     return;
                 }
             }
         }
+
+        #[cfg(debug_assertions)]
+        eprintln!("[TextRenderer] WARNING: No fallback font found!");
     }
 
     /// Register a font with the renderer
@@ -195,7 +213,6 @@ impl TextRenderer {
             return;
         };
 
-        let scale = cached_font.scale_for_size(font_size);
         let charmap = font.charmap();
 
         // Get outline glyphs
@@ -218,7 +235,7 @@ impl TextRenderer {
             // Get the glyph outline
             if let Some(glyph) = outlines.get(glyph_id) {
                 // Create pen at current cursor position
-                let mut pen = TinySkiaPen::new(scale, cursor_x, y);
+                let mut pen = TinySkiaPen::new(cursor_x, y);
 
                 // Create settings for each glyph (DrawSettings doesn't implement Copy)
                 let settings = DrawSettings::unhinted(Size::new(font_size), LocationRef::default());
@@ -256,7 +273,19 @@ impl TextRenderer {
         paint: &Paint,
         pixmap: &mut Pixmap,
     ) {
+        #[cfg(debug_assertions)]
+        eprintln!(
+            "[TextRenderer] render_text_with_advances: font={}, size={}, pos=({}, {}), text={:?}",
+            font_name,
+            font_size,
+            x,
+            y,
+            String::from_utf8_lossy(text)
+        );
+
         let Some(cached_font) = self.get_font(font_name) else {
+            #[cfg(debug_assertions)]
+            eprintln!("[TextRenderer] No font found for: {}", font_name);
             return;
         };
 
@@ -264,7 +293,6 @@ impl TextRenderer {
             return;
         };
 
-        let scale = cached_font.scale_for_size(font_size);
         let charmap = font.charmap();
         let outlines = font.outline_glyphs();
 
@@ -273,21 +301,35 @@ impl TextRenderer {
 
         let mut cursor_x = x;
 
+        let mut glyphs_drawn = 0;
+
         for &byte in text {
             let ch = byte as char;
             let Some(glyph_id) = charmap.map(ch) else {
+                #[cfg(debug_assertions)]
+                eprintln!("[TextRenderer] No glyph for char: {:?}", ch);
                 cursor_x += font_size * 0.6;
                 continue;
             };
 
             if let Some(glyph) = outlines.get(glyph_id) {
-                let mut pen = TinySkiaPen::new(scale, cursor_x, y);
+                let mut pen = TinySkiaPen::new(cursor_x, y);
 
                 // Create settings for each glyph (DrawSettings doesn't implement Copy)
                 let settings = DrawSettings::unhinted(Size::new(font_size), LocationRef::default());
 
                 if glyph.draw(settings, &mut pen).is_ok() {
                     if let Some(path) = pen.finish() {
+                        #[cfg(debug_assertions)]
+                        if glyphs_drawn == 0 {
+                            // Log bounds of first glyph path
+                            let bounds = path.bounds();
+                            eprintln!(
+                                "[TextRenderer] First glyph path bounds: ({}, {}) to ({}, {})",
+                                bounds.x(), bounds.y(),
+                                bounds.x() + bounds.width(), bounds.y() + bounds.height()
+                            );
+                        }
                         pixmap.fill_path(
                             &path,
                             paint,
@@ -295,6 +337,7 @@ impl TextRenderer {
                             transform,
                             None,
                         );
+                        glyphs_drawn += 1;
                     }
                 }
             }
@@ -303,6 +346,9 @@ impl TextRenderer {
             let advance = glyph_metrics.advance_width(glyph_id).unwrap_or(font_size * 0.6);
             cursor_x += advance;
         }
+
+        #[cfg(debug_assertions)]
+        eprintln!("[TextRenderer] Drew {} glyphs", glyphs_drawn);
     }
 }
 
@@ -318,12 +364,12 @@ mod tests {
 
     #[test]
     fn test_tiny_skia_pen_transform() {
-        let pen = TinySkiaPen::new(0.01, 100.0, 200.0);
-        let (x, y) = pen.transform(1000.0, 500.0);
+        let pen = TinySkiaPen::new(100.0, 200.0);
+        let (x, y) = pen.transform(10.0, 5.0);
 
-        // x = 1000 * 0.01 + 100 = 110
+        // x = 10 + 100 = 110
         assert!((x - 110.0).abs() < 0.01);
-        // y = -500 * 0.01 + 200 = 195 (flipped)
+        // y = -5 + 200 = 195 (flipped)
         assert!((y - 195.0).abs() < 0.01);
     }
 
