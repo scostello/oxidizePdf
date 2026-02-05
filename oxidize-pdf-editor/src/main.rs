@@ -1,7 +1,4 @@
-mod app;
-mod pdf;
-mod render;
-mod ui;
+use oxidize_pdf_editor::{app, ui};
 
 fn main() -> iced::Result {
     // Initialize logging

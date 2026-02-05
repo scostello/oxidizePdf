@@ -12,7 +12,8 @@ use std::path::PathBuf;
 /// Main application state
 #[derive(Default)]
 pub struct PdfEditor {
-    state: EditorState,
+    /// Editor state (public for testing)
+    pub state: EditorState,
 }
 
 /// Initialize the application
